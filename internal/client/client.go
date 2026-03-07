@@ -68,12 +68,13 @@ type Domain struct {
 }
 
 type DNSRecord struct {
-	Type     string `json:"type"`
-	Name     string `json:"name"`
-	Value    string `json:"value"`
+	Record   string      `json:"record"`
+	Type     string      `json:"type"`
+	Name     string      `json:"name"`
+	Value    string      `json:"value"`
 	Priority json.Number `json:"priority,omitempty"`
-	TTL      string     `json:"ttl,omitempty"`
-	Status   string     `json:"status,omitempty"`
+	TTL      string      `json:"ttl,omitempty"`
+	Status   string      `json:"status,omitempty"`
 }
 
 type CreateWebhookRequest struct {

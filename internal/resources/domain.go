@@ -20,12 +20,14 @@ type DomainResource struct {
 }
 
 type DomainResourceModel struct {
-	ID        types.String `tfsdk:"id"`
-	Name      types.String `tfsdk:"name"`
-	Region    types.String `tfsdk:"region"`
-	Status    types.String `tfsdk:"status"`
-	CreatedAt types.String `tfsdk:"created_at"`
-	Records   types.List   `tfsdk:"records"`
+	ID           types.String `tfsdk:"id"`
+	Name         types.String `tfsdk:"name"`
+	Region       types.String `tfsdk:"region"`
+	Status       types.String `tfsdk:"status"`
+	CreatedAt    types.String `tfsdk:"created_at"`
+	SPFMXRecord  types.Object `tfsdk:"spf_mx_record"`
+	SPFTXTRecord types.Object `tfsdk:"spf_txt_record"`
+	DKIMRecords  types.List   `tfsdk:"dkim_records"`
 }
 
 func NewDomainResource() resource.Resource {
@@ -72,17 +74,42 @@ func (r *DomainResource) Schema(_ context.Context, _ resource.SchemaRequest, res
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
-			"records": schema.ListNestedAttribute{
+			"spf_mx_record": schema.SingleNestedAttribute{
 				Computed:            true,
-				MarkdownDescription: "DNS records required for domain verification.",
+				MarkdownDescription: "SPF MX record for domain verification.",
+				Attributes: map[string]schema.Attribute{
+					"record":   schema.StringAttribute{Computed: true},
+					"type":     schema.StringAttribute{Computed: true},
+					"name":     schema.StringAttribute{Computed: true},
+					"value":    schema.StringAttribute{Computed: true},
+					"priority": schema.StringAttribute{Computed: true},
+					"ttl":      schema.StringAttribute{Computed: true},
+					"status":   schema.StringAttribute{Computed: true},
+				},
+			},
+			"spf_txt_record": schema.SingleNestedAttribute{
+				Computed:            true,
+				MarkdownDescription: "SPF TXT record for domain verification.",
+				Attributes: map[string]schema.Attribute{
+					"record": schema.StringAttribute{Computed: true},
+					"type":   schema.StringAttribute{Computed: true},
+					"name":   schema.StringAttribute{Computed: true},
+					"value":  schema.StringAttribute{Computed: true},
+					"ttl":    schema.StringAttribute{Computed: true},
+					"status": schema.StringAttribute{Computed: true},
+				},
+			},
+			"dkim_records": schema.ListNestedAttribute{
+				Computed:            true,
+				MarkdownDescription: "DKIM records for domain verification.",
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
-						"type":     schema.StringAttribute{Computed: true},
-						"name":     schema.StringAttribute{Computed: true},
-						"value":    schema.StringAttribute{Computed: true},
-						"priority": schema.StringAttribute{Computed: true},
-						"ttl":      schema.StringAttribute{Computed: true},
-						"status":   schema.StringAttribute{Computed: true},
+						"record": schema.StringAttribute{Computed: true},
+						"type":   schema.StringAttribute{Computed: true},
+						"name":   schema.StringAttribute{Computed: true},
+						"value":  schema.StringAttribute{Computed: true},
+						"ttl":    schema.StringAttribute{Computed: true},
+						"status": schema.StringAttribute{Computed: true},
 					},
 				},
 			},
@@ -121,12 +148,10 @@ func (r *DomainResource) Create(ctx context.Context, req resource.CreateRequest,
 	data.Region = types.StringValue(result.Region)
 	data.CreatedAt = types.StringValue(result.CreatedAt)
 
-	records, diags := dnsRecordsToList(result.Records)
-	resp.Diagnostics.Append(diags...)
+	resp.Diagnostics.Append(setDNSRecordState(result.Records, &data)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	data.Records = records
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
@@ -149,12 +174,10 @@ func (r *DomainResource) Read(ctx context.Context, req resource.ReadRequest, res
 	data.Region = types.StringValue(result.Region)
 	data.CreatedAt = types.StringValue(result.CreatedAt)
 
-	records, diags := dnsRecordsToList(result.Records)
-	resp.Diagnostics.Append(diags...)
+	resp.Diagnostics.Append(setDNSRecordState(result.Records, &data)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	data.Records = records
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
@@ -177,7 +200,8 @@ func (r *DomainResource) Delete(ctx context.Context, req resource.DeleteRequest,
 	}
 }
 
-var dnsRecordAttrTypes = map[string]attr.Type{
+var spfMXRecordAttrTypes = map[string]attr.Type{
+	"record":   types.StringType,
 	"type":     types.StringType,
 	"name":     types.StringType,
 	"value":    types.StringType,
@@ -186,28 +210,99 @@ var dnsRecordAttrTypes = map[string]attr.Type{
 	"status":   types.StringType,
 }
 
-func dnsRecordsToList(records []client.DNSRecord) (types.List, diag.Diagnostics) {
-	recordType := types.ObjectType{AttrTypes: dnsRecordAttrTypes}
+var dkimRecordAttrTypes = map[string]attr.Type{
+	"record": types.StringType,
+	"type":   types.StringType,
+	"name":   types.StringType,
+	"value":  types.StringType,
+	"ttl":    types.StringType,
+	"status": types.StringType,
+}
 
-	if len(records) == 0 {
-		return types.ListValueMust(recordType, []attr.Value{}), nil
-	}
+var spfTXTRecordAttrTypes = dkimRecordAttrTypes
 
-	var recordObjects []attr.Value
-	for _, rec := range records {
-		obj, diags := types.ObjectValue(dnsRecordAttrTypes, map[string]attr.Value{
-			"type":     types.StringValue(rec.Type),
-			"name":     types.StringValue(rec.Name),
-			"value":    types.StringValue(rec.Value),
-			"priority": types.StringValue(rec.Priority.String()),
-			"ttl":      types.StringValue(rec.TTL),
-			"status":   types.StringValue(rec.Status),
-		})
-		if diags.HasError() {
-			return types.ListNull(recordType), diags
+func splitDNSRecords(records []client.DNSRecord) (spfMX *client.DNSRecord, spfTXT *client.DNSRecord, dkim []client.DNSRecord) {
+	for i := range records {
+		rec := &records[i]
+		switch {
+		case rec.Record == "SPF" && rec.Type == "MX":
+			spfMX = rec
+		case rec.Record == "SPF" && rec.Type == "TXT":
+			spfTXT = rec
+		case rec.Record == "DKIM":
+			dkim = append(dkim, *rec)
 		}
-		recordObjects = append(recordObjects, obj)
+	}
+	return
+}
+
+func spfMXToObject(rec *client.DNSRecord) (types.Object, diag.Diagnostics) {
+	if rec == nil {
+		return types.ObjectNull(spfMXRecordAttrTypes), nil
+	}
+	return types.ObjectValue(spfMXRecordAttrTypes, map[string]attr.Value{
+		"record":   types.StringValue(rec.Record),
+		"type":     types.StringValue(rec.Type),
+		"name":     types.StringValue(rec.Name),
+		"value":    types.StringValue(rec.Value),
+		"priority": types.StringValue(rec.Priority.String()),
+		"ttl":      types.StringValue(rec.TTL),
+		"status":   types.StringValue(rec.Status),
+	})
+}
+
+func dnsRecordToObject(rec client.DNSRecord) (types.Object, diag.Diagnostics) {
+	return types.ObjectValue(dkimRecordAttrTypes, map[string]attr.Value{
+		"record": types.StringValue(rec.Record),
+		"type":   types.StringValue(rec.Type),
+		"name":   types.StringValue(rec.Name),
+		"value":  types.StringValue(rec.Value),
+		"ttl":    types.StringValue(rec.TTL),
+		"status": types.StringValue(rec.Status),
+	})
+}
+
+func dkimRecordsToList(records []client.DNSRecord) (types.List, diag.Diagnostics) {
+	objType := types.ObjectType{AttrTypes: dkimRecordAttrTypes}
+	if len(records) == 0 {
+		return types.ListValueMust(objType, []attr.Value{}), nil
+	}
+	var objs []attr.Value
+	for _, rec := range records {
+		obj, diags := dnsRecordToObject(rec)
+		if diags.HasError() {
+			return types.ListNull(objType), diags
+		}
+		objs = append(objs, obj)
+	}
+	return types.ListValue(objType, objs)
+}
+
+func setDNSRecordState(records []client.DNSRecord, data *DomainResourceModel) diag.Diagnostics {
+	var allDiags diag.Diagnostics
+
+	spfMX, spfTXT, dkim := splitDNSRecords(records)
+
+	spfMXObj, diags := spfMXToObject(spfMX)
+	allDiags.Append(diags...)
+
+	var spfTXTObj types.Object
+	if spfTXT != nil {
+		spfTXTObj, diags = dnsRecordToObject(*spfTXT)
+	} else {
+		spfTXTObj = types.ObjectNull(spfTXTRecordAttrTypes)
+	}
+	allDiags.Append(diags...)
+
+	dkimList, diags := dkimRecordsToList(dkim)
+	allDiags.Append(diags...)
+
+	if allDiags.HasError() {
+		return allDiags
 	}
 
-	return types.ListValue(recordType, recordObjects)
+	data.SPFMXRecord = spfMXObj
+	data.SPFTXTRecord = spfTXTObj
+	data.DKIMRecords = dkimList
+	return nil
 }

@@ -19,4 +19,7 @@ lint:
 generate:
 	go generate ./...
 
-.PHONY: build install test testacc lint generate
+docs:
+	tfplugindocs generate --provider-name resend
+
+.PHONY: build install test testacc lint generate docs

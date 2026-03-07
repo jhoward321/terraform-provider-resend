@@ -125,9 +125,9 @@ func (c *Client) doRequest(ctx context.Context, method, path string, body interf
 	}
 
 	if resp.StatusCode >= 400 {
-		defer resp.Body.Close()
+		defer resp.Body.Close() //nolint:errcheck
 		apiErr := &APIError{StatusCode: resp.StatusCode}
-		json.NewDecoder(resp.Body).Decode(apiErr)
+		_ = json.NewDecoder(resp.Body).Decode(apiErr)
 		return nil, apiErr
 	}
 
@@ -135,7 +135,7 @@ func (c *Client) doRequest(ctx context.Context, method, path string, body interf
 }
 
 func decodeResponse[T any](resp *http.Response) (*T, error) {
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 	var result T
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return nil, fmt.Errorf("decoding response: %w", err)
@@ -158,7 +158,7 @@ func (c *Client) DeleteAPIKey(ctx context.Context, id string) error {
 	if err != nil {
 		return err
 	}
-	resp.Body.Close()
+	resp.Body.Close() //nolint:errcheck
 	return nil
 }
 
@@ -185,7 +185,7 @@ func (c *Client) DeleteDomain(ctx context.Context, id string) error {
 	if err != nil {
 		return err
 	}
-	resp.Body.Close()
+	resp.Body.Close() //nolint:errcheck
 	return nil
 }
 
@@ -220,6 +220,6 @@ func (c *Client) DeleteWebhook(ctx context.Context, id string) error {
 	if err != nil {
 		return err
 	}
-	resp.Body.Close()
+	resp.Body.Close() //nolint:errcheck
 	return nil
 }

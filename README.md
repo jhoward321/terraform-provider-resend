@@ -93,6 +93,34 @@ Acceptance tests (requires a Resend API key):
 RESEND_API_KEY=re_xxx make testacc
 ```
 
+## Releasing
+
+Releases are automated via GitHub Actions.
+
+**Via git tag:**
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+**Via GitHub UI:**
+
+Go to Actions → Release → Run workflow, enter the version tag (e.g., `v0.1.0`).
+
+Both methods run acceptance tests before building. If tests pass, GoReleaser creates a signed GitHub Release that the Terraform Registry syncs automatically.
+
+### First-time setup
+
+1. Generate a GPG key: `gpg --full-generate-key`
+2. Export the private key: `gpg --armor --export-secret-keys <KEY_ID>`
+3. Add these GitHub repo secrets:
+   - `GPG_PRIVATE_KEY` — the exported private key
+   - `PASSPHRASE` — the GPG key passphrase
+   - `RESEND_API_KEY` — Resend API key for acceptance tests
+4. Add the public key to [registry.terraform.io](https://registry.terraform.io) under your account settings
+5. Link the repo on the Terraform Registry via Publish → Provider
+
 ## License
 
 [Mozilla Public License v2.0](LICENSE)

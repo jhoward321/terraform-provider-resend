@@ -18,13 +18,13 @@ func TestCreateAPIKey(t *testing.T) {
 		}
 
 		var body CreateAPIKeyRequest
-		json.NewDecoder(r.Body).Decode(&body)
+		_ = json.NewDecoder(r.Body).Decode(&body)
 		if body.Name != "test" {
 			t.Errorf("unexpected name: %s", body.Name)
 		}
 
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(CreateAPIKeyResponse{
+		_ = json.NewEncoder(w).Encode(CreateAPIKeyResponse{
 			ID:    "key-123",
 			Token: "re_test_token",
 		})
@@ -67,13 +67,13 @@ func TestCreateDomain(t *testing.T) {
 		}
 
 		var body CreateDomainRequest
-		json.NewDecoder(r.Body).Decode(&body)
+		_ = json.NewDecoder(r.Body).Decode(&body)
 		if body.Name != "example.com" {
 			t.Errorf("unexpected name: %s", body.Name)
 		}
 
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(Domain{
+		_ = json.NewEncoder(w).Encode(Domain{
 			ID:     "domain-123",
 			Name:   "example.com",
 			Status: "pending",
@@ -97,7 +97,7 @@ func TestGetDomain(t *testing.T) {
 			t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
 		}
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(Domain{
+		_ = json.NewEncoder(w).Encode(Domain{
 			ID:     "domain-123",
 			Name:   "example.com",
 			Status: "verified",
@@ -144,13 +144,13 @@ func TestCreateWebhook(t *testing.T) {
 		}
 
 		var body CreateWebhookRequest
-		json.NewDecoder(r.Body).Decode(&body)
+		_ = json.NewDecoder(r.Body).Decode(&body)
 		if body.URL != "https://example.com/webhook" {
 			t.Errorf("unexpected URL: %s", body.URL)
 		}
 
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(Webhook{
+		_ = json.NewEncoder(w).Encode(Webhook{
 			ID:         "wh-123",
 			URL:        "https://example.com/webhook",
 			EventTypes: []string{"email.sent", "email.delivered"},
@@ -177,7 +177,7 @@ func TestGetWebhook(t *testing.T) {
 			t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
 		}
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(Webhook{
+		_ = json.NewEncoder(w).Encode(Webhook{
 			ID:         "wh-123",
 			URL:        "https://example.com/webhook",
 			EventTypes: []string{"email.sent"},
@@ -201,7 +201,7 @@ func TestUpdateWebhook(t *testing.T) {
 			t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
 		}
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(Webhook{
+		_ = json.NewEncoder(w).Encode(Webhook{
 			ID:         "wh-123",
 			URL:        "https://example.com/webhook-updated",
 			EventTypes: []string{"email.sent", "email.bounced"},
@@ -241,7 +241,7 @@ func TestDeleteWebhook(t *testing.T) {
 func TestAPIError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
-		w.Write([]byte(`{"message":"Invalid API key"}`))
+		_, _ = w.Write([]byte(`{"message":"Invalid API key"}`))
 	}))
 	defer server.Close()
 

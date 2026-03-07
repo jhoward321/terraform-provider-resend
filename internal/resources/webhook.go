@@ -82,8 +82,8 @@ func (r *WebhookResource) Create(ctx context.Context, req resource.CreateRequest
 	}
 
 	result, err := r.client.CreateWebhook(ctx, client.CreateWebhookRequest{
-		URL:        data.URL.ValueString(),
-		EventTypes: eventTypes,
+		Endpoint: data.URL.ValueString(),
+		Events:   eventTypes,
 	})
 	if err != nil {
 		resp.Diagnostics.AddError("Error creating webhook", err.Error())
@@ -91,11 +91,14 @@ func (r *WebhookResource) Create(ctx context.Context, req resource.CreateRequest
 	}
 
 	data.ID = types.StringValue(result.ID)
-	data.CreatedAt = types.StringValue(result.CreatedAt)
 
-	etList, diags := types.ListValueFrom(ctx, types.StringType, result.EventTypes)
-	resp.Diagnostics.Append(diags...)
-	data.EventTypes = etList
+	// Create response only returns id and signing_secret, so read back to get created_at.
+	webhook, err := r.client.GetWebhook(ctx, result.ID)
+	if err != nil {
+		resp.Diagnostics.AddError("Error reading webhook after create", err.Error())
+		return
+	}
+	data.CreatedAt = types.StringValue(webhook.CreatedAt)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
@@ -113,10 +116,10 @@ func (r *WebhookResource) Read(ctx context.Context, req resource.ReadRequest, re
 		return
 	}
 
-	data.URL = types.StringValue(result.URL)
+	data.URL = types.StringValue(result.Endpoint)
 	data.CreatedAt = types.StringValue(result.CreatedAt)
 
-	etList, diags := types.ListValueFrom(ctx, types.StringType, result.EventTypes)
+	etList, diags := types.ListValueFrom(ctx, types.StringType, result.Events)
 	resp.Diagnostics.Append(diags...)
 	data.EventTypes = etList
 
@@ -136,18 +139,26 @@ func (r *WebhookResource) Update(ctx context.Context, req resource.UpdateRequest
 		return
 	}
 
-	result, err := r.client.UpdateWebhook(ctx, data.ID.ValueString(), client.UpdateWebhookRequest{
-		URL:        data.URL.ValueString(),
-		EventTypes: eventTypes,
+	_, err := r.client.UpdateWebhook(ctx, data.ID.ValueString(), client.UpdateWebhookRequest{
+		Endpoint: data.URL.ValueString(),
+		Events:   eventTypes,
 	})
 	if err != nil {
 		resp.Diagnostics.AddError("Error updating webhook", err.Error())
 		return
 	}
 
-	data.CreatedAt = types.StringValue(result.CreatedAt)
+	// Read back to get current state from the API.
+	webhook, err := r.client.GetWebhook(ctx, data.ID.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError("Error reading webhook after update", err.Error())
+		return
+	}
 
-	etList, diags := types.ListValueFrom(ctx, types.StringType, result.EventTypes)
+	data.URL = types.StringValue(webhook.Endpoint)
+	data.CreatedAt = types.StringValue(webhook.CreatedAt)
+
+	etList, diags := types.ListValueFrom(ctx, types.StringType, webhook.Events)
 	resp.Diagnostics.Append(diags...)
 	data.EventTypes = etList
 

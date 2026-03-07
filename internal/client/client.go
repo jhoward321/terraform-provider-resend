@@ -6,7 +6,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
+	"strconv"
+	"time"
 )
 
 const defaultBaseURL = "https://api.resend.com"
@@ -68,26 +71,26 @@ type DNSRecord struct {
 	Type     string `json:"type"`
 	Name     string `json:"name"`
 	Value    string `json:"value"`
-	Priority string `json:"priority,omitempty"`
-	TTL      string `json:"ttl,omitempty"`
-	Status   string `json:"status,omitempty"`
+	Priority json.Number `json:"priority,omitempty"`
+	TTL      string     `json:"ttl,omitempty"`
+	Status   string     `json:"status,omitempty"`
 }
 
 type CreateWebhookRequest struct {
-	URL        string   `json:"url"`
-	EventTypes []string `json:"event_types"`
+	Endpoint string   `json:"endpoint"`
+	Events   []string `json:"events"`
 }
 
 type UpdateWebhookRequest struct {
-	URL        string   `json:"url,omitempty"`
-	EventTypes []string `json:"event_types,omitempty"`
+	Endpoint string   `json:"endpoint,omitempty"`
+	Events   []string `json:"events,omitempty"`
 }
 
 type Webhook struct {
-	ID         string   `json:"id"`
-	URL        string   `json:"url"`
-	EventTypes []string `json:"event_types"`
-	CreatedAt  string   `json:"created_at"`
+	ID        string   `json:"id"`
+	Endpoint  string   `json:"endpoint"`
+	Events    []string `json:"events"`
+	CreatedAt string   `json:"created_at"`
 }
 
 type APIError struct {
@@ -101,37 +104,71 @@ func (e *APIError) Error() string {
 
 // --- HTTP helpers ---
 
+const maxRetries = 5
+
 func (c *Client) doRequest(ctx context.Context, method, path string, body interface{}) (*http.Response, error) {
-	var reqBody io.Reader
+	var bodyBytes []byte
 	if body != nil {
 		b, err := json.Marshal(body)
 		if err != nil {
 			return nil, fmt.Errorf("marshaling request: %w", err)
 		}
-		reqBody = bytes.NewReader(b)
+		bodyBytes = b
 	}
 
-	req, err := http.NewRequestWithContext(ctx, method, c.baseURL+"/"+path, reqBody)
-	if err != nil {
-		return nil, fmt.Errorf("creating request: %w", err)
+	for attempt := range maxRetries {
+		var reqBody io.Reader
+		if bodyBytes != nil {
+			reqBody = bytes.NewReader(bodyBytes)
+		}
+
+		req, err := http.NewRequestWithContext(ctx, method, c.baseURL+"/"+path, reqBody)
+		if err != nil {
+			return nil, fmt.Errorf("creating request: %w", err)
+		}
+
+		req.Header.Set("Authorization", "Bearer "+c.apiKey)
+		req.Header.Set("Content-Type", "application/json")
+
+		resp, err := c.httpClient.Do(req)
+		if err != nil {
+			return nil, fmt.Errorf("executing request: %w", err)
+		}
+
+		if resp.StatusCode == http.StatusTooManyRequests {
+			resp.Body.Close() //nolint:errcheck
+			if attempt == maxRetries-1 {
+				return nil, &APIError{StatusCode: resp.StatusCode, Message: "rate limited after max retries"}
+			}
+			delay := retryDelay(resp, attempt)
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(delay):
+				continue
+			}
+		}
+
+		if resp.StatusCode >= 400 {
+			defer resp.Body.Close() //nolint:errcheck
+			apiErr := &APIError{StatusCode: resp.StatusCode}
+			_ = json.NewDecoder(resp.Body).Decode(apiErr)
+			return nil, apiErr
+		}
+
+		return resp, nil
 	}
 
-	req.Header.Set("Authorization", "Bearer "+c.apiKey)
-	req.Header.Set("Content-Type", "application/json")
+	return nil, fmt.Errorf("unexpected: exhausted retries")
+}
 
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("executing request: %w", err)
+func retryDelay(resp *http.Response, attempt int) time.Duration {
+	if v := resp.Header.Get("Retry-After"); v != "" {
+		if secs, err := strconv.Atoi(v); err == nil {
+			return time.Duration(secs) * time.Second
+		}
 	}
-
-	if resp.StatusCode >= 400 {
-		defer resp.Body.Close() //nolint:errcheck
-		apiErr := &APIError{StatusCode: resp.StatusCode}
-		_ = json.NewDecoder(resp.Body).Decode(apiErr)
-		return nil, apiErr
-	}
-
-	return resp, nil
+	return time.Duration(math.Pow(2, float64(attempt))) * time.Second
 }
 
 func decodeResponse[T any](resp *http.Response) (*T, error) {
@@ -208,7 +245,7 @@ func (c *Client) GetWebhook(ctx context.Context, id string) (*Webhook, error) {
 }
 
 func (c *Client) UpdateWebhook(ctx context.Context, id string, req UpdateWebhookRequest) (*Webhook, error) {
-	resp, err := c.doRequest(ctx, http.MethodPut, "webhooks/"+id, req)
+	resp, err := c.doRequest(ctx, http.MethodPatch, "webhooks/"+id, req)
 	if err != nil {
 		return nil, err
 	}

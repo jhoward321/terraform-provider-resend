@@ -229,7 +229,7 @@ func splitDNSRecords(records []client.DNSRecord) (spfMX *client.DNSRecord, spfTX
 			spfMX = rec
 		case rec.Record == "SPF" && rec.Type == "TXT":
 			spfTXT = rec
-		default:
+		case rec.Record == "DKIM":
 			dkim = append(dkim, *rec)
 		}
 	}

@@ -37,7 +37,8 @@ func (r *WebhookResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 		MarkdownDescription: "Manages a Resend webhook endpoint.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
-				Computed: true,
+				Computed:            true,
+				MarkdownDescription: "Webhook identifier.",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
@@ -52,7 +53,8 @@ func (r *WebhookResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 				MarkdownDescription: "Event types to subscribe to (e.g., `email.sent`, `email.delivered`, `email.bounced`).",
 			},
 			"created_at": schema.StringAttribute{
-				Computed: true,
+				Computed:            true,
+				MarkdownDescription: "Timestamp when the webhook was created.",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},

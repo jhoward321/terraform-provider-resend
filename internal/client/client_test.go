@@ -145,23 +145,23 @@ func TestCreateWebhook(t *testing.T) {
 
 		var body CreateWebhookRequest
 		_ = json.NewDecoder(r.Body).Decode(&body)
-		if body.URL != "https://example.com/webhook" {
-			t.Errorf("unexpected URL: %s", body.URL)
+		if body.Endpoint != "https://example.com/webhook" {
+			t.Errorf("unexpected Endpoint: %s", body.Endpoint)
 		}
 
 		w.WriteHeader(http.StatusOK)
 		_ = json.NewEncoder(w).Encode(Webhook{
-			ID:         "wh-123",
-			URL:        "https://example.com/webhook",
-			EventTypes: []string{"email.sent", "email.delivered"},
+			ID:       "wh-123",
+			Endpoint: "https://example.com/webhook",
+			Events:   []string{"email.sent", "email.delivered"},
 		})
 	}))
 	defer server.Close()
 
 	c := New("test-key", WithBaseURL(server.URL))
 	resp, err := c.CreateWebhook(context.Background(), CreateWebhookRequest{
-		URL:        "https://example.com/webhook",
-		EventTypes: []string{"email.sent", "email.delivered"},
+		Endpoint: "https://example.com/webhook",
+		Events:   []string{"email.sent", "email.delivered"},
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -178,9 +178,9 @@ func TestGetWebhook(t *testing.T) {
 		}
 		w.WriteHeader(http.StatusOK)
 		_ = json.NewEncoder(w).Encode(Webhook{
-			ID:         "wh-123",
-			URL:        "https://example.com/webhook",
-			EventTypes: []string{"email.sent"},
+			ID:       "wh-123",
+			Endpoint: "https://example.com/webhook",
+			Events:   []string{"email.sent"},
 		})
 	}))
 	defer server.Close()
@@ -190,35 +190,35 @@ func TestGetWebhook(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if resp.URL != "https://example.com/webhook" {
-		t.Errorf("unexpected URL: %s", resp.URL)
+	if resp.Endpoint != "https://example.com/webhook" {
+		t.Errorf("unexpected Endpoint: %s", resp.Endpoint)
 	}
 }
 
 func TestUpdateWebhook(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPut || r.URL.Path != "/webhooks/wh-123" {
+		if r.Method != http.MethodPatch || r.URL.Path != "/webhooks/wh-123" {
 			t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
 		}
 		w.WriteHeader(http.StatusOK)
 		_ = json.NewEncoder(w).Encode(Webhook{
-			ID:         "wh-123",
-			URL:        "https://example.com/webhook-updated",
-			EventTypes: []string{"email.sent", "email.bounced"},
+			ID:       "wh-123",
+			Endpoint: "https://example.com/webhook-updated",
+			Events:   []string{"email.sent", "email.bounced"},
 		})
 	}))
 	defer server.Close()
 
 	c := New("test-key", WithBaseURL(server.URL))
 	resp, err := c.UpdateWebhook(context.Background(), "wh-123", UpdateWebhookRequest{
-		URL:        "https://example.com/webhook-updated",
-		EventTypes: []string{"email.sent", "email.bounced"},
+		Endpoint: "https://example.com/webhook-updated",
+		Events:   []string{"email.sent", "email.bounced"},
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if resp.URL != "https://example.com/webhook-updated" {
-		t.Errorf("unexpected URL: %s", resp.URL)
+	if resp.Endpoint != "https://example.com/webhook-updated" {
+		t.Errorf("unexpected Endpoint: %s", resp.Endpoint)
 	}
 }
 
@@ -235,6 +235,55 @@ func TestDeleteWebhook(t *testing.T) {
 	err := c.DeleteWebhook(context.Background(), "wh-123")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestRateLimitRetry(t *testing.T) {
+	attempts := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts++
+		if attempts <= 2 {
+			w.Header().Set("Retry-After", "1")
+			w.WriteHeader(http.StatusTooManyRequests)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(CreateAPIKeyResponse{
+			ID:    "key-123",
+			Token: "re_test_token",
+		})
+	}))
+	defer server.Close()
+
+	c := New("test-key", WithBaseURL(server.URL))
+	resp, err := c.CreateAPIKey(context.Background(), CreateAPIKeyRequest{Name: "test"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp.ID != "key-123" {
+		t.Errorf("unexpected ID: %s", resp.ID)
+	}
+	if attempts != 3 {
+		t.Errorf("expected 3 attempts, got %d", attempts)
+	}
+}
+
+func TestRateLimitExhausted(t *testing.T) {
+	attempts := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts++
+		w.Header().Set("Retry-After", "0")
+		w.WriteHeader(http.StatusTooManyRequests)
+	}))
+	defer server.Close()
+
+	c := New("test-key", WithBaseURL(server.URL))
+	_, err := c.CreateAPIKey(context.Background(), CreateAPIKeyRequest{Name: "test"})
+	if err == nil {
+		t.Fatal("expected error after exhausting retries")
+	}
+	if attempts != maxRetries {
+		t.Errorf("expected %d attempts, got %d", maxRetries, attempts)
 	}
 }
 

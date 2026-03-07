@@ -199,7 +199,7 @@ func dnsRecordsToList(records []client.DNSRecord) (types.List, diag.Diagnostics)
 			"type":     types.StringValue(rec.Type),
 			"name":     types.StringValue(rec.Name),
 			"value":    types.StringValue(rec.Value),
-			"priority": types.StringValue(rec.Priority),
+			"priority": types.StringValue(rec.Priority.String()),
 			"ttl":      types.StringValue(rec.TTL),
 			"status":   types.StringValue(rec.Status),
 		})

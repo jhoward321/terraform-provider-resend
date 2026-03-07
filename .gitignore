@@ -1,0 +1,7 @@
+terraform-provider-resend
+*.tfstate
+*.tfstate.backup
+.terraform/
+dist/
+docs/plans/
+CLAUDE.md

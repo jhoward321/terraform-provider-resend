@@ -97,14 +97,18 @@ func TestGetDomain(t *testing.T) {
 			t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
 		}
 		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(Domain{
-			ID:     "domain-123",
-			Name:   "example.com",
-			Status: "verified",
-			Records: []DNSRecord{
-				{Type: "MX", Name: "example.com", Value: "feedback-smtp.us-east-1.amazonses.com", Priority: "10"},
-			},
-		})
+		_, _ = w.Write([]byte(`{
+			"id": "domain-123",
+			"name": "example.com",
+			"status": "verified",
+			"region": "us-east-1",
+			"created_at": "2023-04-26T20:21:26.347412+00:00",
+			"records": [
+				{"record": "SPF", "name": "send", "type": "MX", "ttl": "Auto", "status": "verified", "value": "feedback-smtp.us-east-1.amazonses.com", "priority": 10},
+				{"record": "SPF", "name": "send", "type": "TXT", "ttl": "Auto", "status": "verified", "value": "v=spf1 include:amazonses.com ~all"},
+				{"record": "DKIM", "name": "resend._domainkey", "type": "CNAME", "ttl": "Auto", "status": "verified", "value": "dkim.us-east-1.resend.com"}
+			]
+		}`))
 	}))
 	defer server.Close()
 
@@ -116,8 +120,17 @@ func TestGetDomain(t *testing.T) {
 	if resp.Status != "verified" {
 		t.Errorf("unexpected status: %s", resp.Status)
 	}
-	if len(resp.Records) != 1 {
-		t.Errorf("unexpected records count: %d", len(resp.Records))
+	if len(resp.Records) != 3 {
+		t.Fatalf("expected 3 records, got %d", len(resp.Records))
+	}
+	if resp.Records[0].Record != "SPF" {
+		t.Errorf("expected first record to be SPF, got %s", resp.Records[0].Record)
+	}
+	if resp.Records[0].Priority.String() != "10" {
+		t.Errorf("expected priority 10, got %s", resp.Records[0].Priority.String())
+	}
+	if resp.Records[2].Record != "DKIM" {
+		t.Errorf("expected third record to be DKIM, got %s", resp.Records[2].Record)
 	}
 }
 

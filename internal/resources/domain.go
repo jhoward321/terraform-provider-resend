@@ -43,7 +43,8 @@ func (r *DomainResource) Schema(_ context.Context, _ resource.SchemaRequest, res
 		MarkdownDescription: "Manages a Resend sending domain.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
-				Computed: true,
+				Computed:            true,
+				MarkdownDescription: "Domain identifier.",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
@@ -69,7 +70,8 @@ func (r *DomainResource) Schema(_ context.Context, _ resource.SchemaRequest, res
 				MarkdownDescription: "Domain verification status.",
 			},
 			"created_at": schema.StringAttribute{
-				Computed: true,
+				Computed:            true,
+				MarkdownDescription: "Timestamp when the domain was created.",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
@@ -78,25 +80,25 @@ func (r *DomainResource) Schema(_ context.Context, _ resource.SchemaRequest, res
 				Computed:            true,
 				MarkdownDescription: "SPF MX record for domain verification.",
 				Attributes: map[string]schema.Attribute{
-					"record":   schema.StringAttribute{Computed: true},
-					"type":     schema.StringAttribute{Computed: true},
-					"name":     schema.StringAttribute{Computed: true},
-					"value":    schema.StringAttribute{Computed: true},
-					"priority": schema.StringAttribute{Computed: true},
-					"ttl":      schema.StringAttribute{Computed: true},
-					"status":   schema.StringAttribute{Computed: true},
+					"record":   schema.StringAttribute{Computed: true, MarkdownDescription: "Record purpose (e.g., `SPF`, `DKIM`)."},
+					"type":     schema.StringAttribute{Computed: true, MarkdownDescription: "DNS record type (e.g., `MX`, `TXT`, `CNAME`)."},
+					"name":     schema.StringAttribute{Computed: true, MarkdownDescription: "DNS record hostname."},
+					"value":    schema.StringAttribute{Computed: true, MarkdownDescription: "DNS record value."},
+					"priority": schema.StringAttribute{Computed: true, MarkdownDescription: "MX record priority."},
+					"ttl":      schema.StringAttribute{Computed: true, MarkdownDescription: "Time to live."},
+					"status":   schema.StringAttribute{Computed: true, MarkdownDescription: "Verification status of this record."},
 				},
 			},
 			"spf_txt_record": schema.SingleNestedAttribute{
 				Computed:            true,
 				MarkdownDescription: "SPF TXT record for domain verification.",
 				Attributes: map[string]schema.Attribute{
-					"record": schema.StringAttribute{Computed: true},
-					"type":   schema.StringAttribute{Computed: true},
-					"name":   schema.StringAttribute{Computed: true},
-					"value":  schema.StringAttribute{Computed: true},
-					"ttl":    schema.StringAttribute{Computed: true},
-					"status": schema.StringAttribute{Computed: true},
+					"record": schema.StringAttribute{Computed: true, MarkdownDescription: "Record purpose (e.g., `SPF`, `DKIM`)."},
+					"type":   schema.StringAttribute{Computed: true, MarkdownDescription: "DNS record type (e.g., `MX`, `TXT`, `CNAME`)."},
+					"name":   schema.StringAttribute{Computed: true, MarkdownDescription: "DNS record hostname."},
+					"value":  schema.StringAttribute{Computed: true, MarkdownDescription: "DNS record value."},
+					"ttl":    schema.StringAttribute{Computed: true, MarkdownDescription: "Time to live."},
+					"status": schema.StringAttribute{Computed: true, MarkdownDescription: "Verification status of this record."},
 				},
 			},
 			"dkim_records": schema.ListNestedAttribute{
@@ -104,12 +106,12 @@ func (r *DomainResource) Schema(_ context.Context, _ resource.SchemaRequest, res
 				MarkdownDescription: "DKIM records for domain verification.",
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
-						"record": schema.StringAttribute{Computed: true},
-						"type":   schema.StringAttribute{Computed: true},
-						"name":   schema.StringAttribute{Computed: true},
-						"value":  schema.StringAttribute{Computed: true},
-						"ttl":    schema.StringAttribute{Computed: true},
-						"status": schema.StringAttribute{Computed: true},
+						"record": schema.StringAttribute{Computed: true, MarkdownDescription: "Record purpose (e.g., `SPF`, `DKIM`)."},
+						"type":   schema.StringAttribute{Computed: true, MarkdownDescription: "DNS record type (e.g., `MX`, `TXT`, `CNAME`)."},
+						"name":   schema.StringAttribute{Computed: true, MarkdownDescription: "DNS record hostname."},
+						"value":  schema.StringAttribute{Computed: true, MarkdownDescription: "DNS record value."},
+						"ttl":    schema.StringAttribute{Computed: true, MarkdownDescription: "Time to live."},
+						"status": schema.StringAttribute{Computed: true, MarkdownDescription: "Verification status of this record."},
 					},
 				},
 			},

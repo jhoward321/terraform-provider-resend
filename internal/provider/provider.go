@@ -36,6 +36,7 @@ func (p *ResendProvider) Metadata(_ context.Context, _ provider.MetadataRequest,
 
 func (p *ResendProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp *provider.SchemaResponse) {
 	resp.Schema = schema.Schema{
+		MarkdownDescription: "The Resend provider manages resources for the [Resend](https://resend.com) email API, including domains, API keys, and webhooks.",
 		Attributes: map[string]schema.Attribute{
 			"api_key": schema.StringAttribute{
 				Optional:            true,

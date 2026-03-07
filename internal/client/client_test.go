@@ -272,7 +272,7 @@ func TestRateLimitExhausted(t *testing.T) {
 	attempts := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		attempts++
-		w.Header().Set("Retry-After", "1")
+		w.Header().Set("Retry-After", "0")
 		w.WriteHeader(http.StatusTooManyRequests)
 	}))
 	defer server.Close()

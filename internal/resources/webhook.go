@@ -92,13 +92,18 @@ func (r *WebhookResource) Create(ctx context.Context, req resource.CreateRequest
 
 	data.ID = types.StringValue(result.ID)
 
-	// Create response only returns id and signing_secret, so read back to get created_at.
+	// Create response only returns id and signing_secret, so read back full state.
 	webhook, err := r.client.GetWebhook(ctx, result.ID)
 	if err != nil {
 		resp.Diagnostics.AddError("Error reading webhook after create", err.Error())
 		return
 	}
+	data.URL = types.StringValue(webhook.Endpoint)
 	data.CreatedAt = types.StringValue(webhook.CreatedAt)
+
+	etList, diags := types.ListValueFrom(ctx, types.StringType, webhook.Events)
+	resp.Diagnostics.Append(diags...)
+	data.EventTypes = etList
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }

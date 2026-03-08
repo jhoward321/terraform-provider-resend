@@ -88,10 +88,11 @@ type UpdateWebhookRequest struct {
 }
 
 type Webhook struct {
-	ID        string   `json:"id"`
-	Endpoint  string   `json:"endpoint"`
-	Events    []string `json:"events"`
-	CreatedAt string   `json:"created_at"`
+	ID            string   `json:"id"`
+	Endpoint      string   `json:"endpoint"`
+	Events        []string `json:"events"`
+	CreatedAt     string   `json:"created_at"`
+	SigningSecret string   `json:"signing_secret,omitempty"`
 }
 
 type APIError struct {

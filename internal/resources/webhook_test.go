@@ -21,6 +21,7 @@ resource "resend_webhook" "test" {
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttrSet("resend_webhook.test", "id"),
 					resource.TestCheckResourceAttr("resend_webhook.test", "url", "https://example.com/webhook-test"),
+					resource.TestCheckResourceAttrSet("resend_webhook.test", "signing_secret"),
 				),
 			},
 			{

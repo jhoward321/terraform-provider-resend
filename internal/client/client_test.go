@@ -164,9 +164,10 @@ func TestCreateWebhook(t *testing.T) {
 
 		w.WriteHeader(http.StatusOK)
 		_ = json.NewEncoder(w).Encode(Webhook{
-			ID:       "wh-123",
-			Endpoint: "https://example.com/webhook",
-			Events:   []string{"email.sent", "email.delivered"},
+			ID:            "wh-123",
+			Endpoint:      "https://example.com/webhook",
+			Events:        []string{"email.sent", "email.delivered"},
+			SigningSecret: "whsec_test123",
 		})
 	}))
 	defer server.Close()
@@ -181,6 +182,9 @@ func TestCreateWebhook(t *testing.T) {
 	}
 	if resp.ID != "wh-123" {
 		t.Errorf("unexpected ID: %s", resp.ID)
+	}
+	if resp.SigningSecret != "whsec_test123" {
+		t.Errorf("unexpected signing secret: %s", resp.SigningSecret)
 	}
 }
 

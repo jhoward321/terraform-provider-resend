@@ -31,3 +31,4 @@ resource "resend_webhook" "example" {
 
 - `created_at` (String) Timestamp when the webhook was created.
 - `id` (String) Webhook identifier.
+- `signing_secret` (String, Sensitive) The webhook signing secret. Only available at creation time.

@@ -18,10 +18,11 @@ type WebhookResource struct {
 }
 
 type WebhookResourceModel struct {
-	ID         types.String `tfsdk:"id"`
-	URL        types.String `tfsdk:"url"`
-	EventTypes types.List   `tfsdk:"event_types"`
-	CreatedAt  types.String `tfsdk:"created_at"`
+	ID            types.String `tfsdk:"id"`
+	URL           types.String `tfsdk:"url"`
+	EventTypes    types.List   `tfsdk:"event_types"`
+	CreatedAt     types.String `tfsdk:"created_at"`
+	SigningSecret types.String `tfsdk:"signing_secret"`
 }
 
 func NewWebhookResource() resource.Resource {
@@ -55,6 +56,14 @@ func (r *WebhookResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 			"created_at": schema.StringAttribute{
 				Computed:            true,
 				MarkdownDescription: "Timestamp when the webhook was created.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"signing_secret": schema.StringAttribute{
+				Computed:            true,
+				Sensitive:           true,
+				MarkdownDescription: "The webhook signing secret. Only available at creation time.",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
@@ -93,6 +102,7 @@ func (r *WebhookResource) Create(ctx context.Context, req resource.CreateRequest
 	}
 
 	data.ID = types.StringValue(result.ID)
+	data.SigningSecret = types.StringValue(result.SigningSecret)
 
 	// Create response only returns id and signing_secret, so read back full state.
 	webhook, err := r.client.GetWebhook(ctx, result.ID)

@@ -5,6 +5,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
@@ -13,7 +14,10 @@ import (
 	"github.com/jhoward321/terraform-provider-resend/internal/client"
 )
 
-var _ resource.Resource = &DomainResource{}
+var (
+	_ resource.Resource                = &DomainResource{}
+	_ resource.ResourceWithImportState = &DomainResource{}
+)
 
 type DomainResource struct {
 	client *client.Client
@@ -200,6 +204,10 @@ func (r *DomainResource) Delete(ctx context.Context, req resource.DeleteRequest,
 		resp.Diagnostics.AddError("Error deleting domain", err.Error())
 		return
 	}
+}
+
+func (r *DomainResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }
 
 var spfMXRecordAttrTypes = map[string]attr.Type{

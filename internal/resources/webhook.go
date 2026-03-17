@@ -3,6 +3,7 @@ package resources
 import (
 	"context"
 
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
@@ -11,7 +12,10 @@ import (
 	"github.com/jhoward321/terraform-provider-resend/internal/client"
 )
 
-var _ resource.Resource = &WebhookResource{}
+var (
+	_ resource.Resource                = &WebhookResource{}
+	_ resource.ResourceWithImportState = &WebhookResource{}
+)
 
 type WebhookResource struct {
 	client *client.Client
@@ -194,4 +198,8 @@ func (r *WebhookResource) Delete(ctx context.Context, req resource.DeleteRequest
 		resp.Diagnostics.AddError("Error deleting webhook", err.Error())
 		return
 	}
+}
+
+func (r *WebhookResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }

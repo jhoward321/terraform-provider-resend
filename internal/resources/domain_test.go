@@ -36,6 +36,11 @@ resource "resend_domain" "test" {
 					resource.TestCheckResourceAttrSet("resend_domain.test", "dkim_records.0.value"),
 				),
 			},
+			{
+				ResourceName:      "resend_domain.test",
+				ImportState:       true,
+				ImportStateVerify: true,
+			},
 		},
 	})
 }

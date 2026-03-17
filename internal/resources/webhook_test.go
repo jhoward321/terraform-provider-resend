@@ -35,6 +35,12 @@ resource "resend_webhook" "test" {
 					resource.TestCheckResourceAttr("resend_webhook.test", "url", "https://example.com/webhook-updated"),
 				),
 			},
+			{
+				ResourceName:            "resend_webhook.test",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"signing_secret"},
+			},
 		},
 	})
 }

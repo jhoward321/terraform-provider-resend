@@ -67,7 +67,7 @@ func (r *WebhookResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 			"signing_secret": schema.StringAttribute{
 				Computed:            true,
 				Sensitive:           true,
-				MarkdownDescription: "The webhook signing secret. Only available at creation time.",
+				MarkdownDescription: "The webhook signing secret. Only available at creation time; will be empty after `terraform import`.",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},

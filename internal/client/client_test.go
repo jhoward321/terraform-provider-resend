@@ -367,3 +367,118 @@ func TestUpdateWebhookStatus(t *testing.T) {
 		t.Errorf("unexpected status: %s", resp.Status)
 	}
 }
+
+func TestGetDomainNewFields(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/domains/domain-123" {
+			t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{
+			"id": "domain-123",
+			"name": "example.com",
+			"status": "verified",
+			"region": "us-east-1",
+			"created_at": "2023-04-26T20:21:26.347412+00:00",
+			"open_tracking": true,
+			"click_tracking": false,
+			"tracking_subdomain": "track",
+			"capabilities": {"sending": "enabled", "receiving": "disabled"},
+			"records": []
+		}`))
+	}))
+	defer server.Close()
+
+	c := New("test-key", WithBaseURL(server.URL))
+	resp, err := c.GetDomain(context.Background(), "domain-123")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !resp.OpenTracking {
+		t.Error("expected open_tracking true")
+	}
+	if resp.ClickTracking {
+		t.Error("expected click_tracking false")
+	}
+	if resp.TrackingSubdomain != "track" {
+		t.Errorf("unexpected tracking_subdomain: %s", resp.TrackingSubdomain)
+	}
+	if resp.Capabilities.Sending != "enabled" || resp.Capabilities.Receiving != "disabled" {
+		t.Errorf("unexpected capabilities: %+v", resp.Capabilities)
+	}
+}
+
+func TestCreateDomainSendsNewFields(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/domains" {
+			t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		var raw map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&raw)
+		if raw["tls"] != "enforced" {
+			t.Errorf("expected tls enforced, got %v", raw["tls"])
+		}
+		if raw["click_tracking"] != true {
+			t.Errorf("expected click_tracking true, got %v", raw["click_tracking"])
+		}
+		if _, ok := raw["open_tracking"]; ok {
+			t.Errorf("open_tracking should be omitted when unset, got %v", raw["open_tracking"])
+		}
+		caps, _ := raw["capabilities"].(map[string]any)
+		if caps == nil || caps["receiving"] != "enabled" {
+			t.Errorf("expected capabilities.receiving enabled, got %v", raw["capabilities"])
+		}
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"id":"domain-123","name":"example.com","status":"pending","capabilities":{"sending":"enabled","receiving":"enabled"}}`))
+	}))
+	defer server.Close()
+
+	c := New("test-key", WithBaseURL(server.URL))
+	clickTrue := true
+	tlsEnforced := "enforced"
+	_, err := c.CreateDomain(context.Background(), CreateDomainRequest{
+		Name:          "example.com",
+		ClickTracking: &clickTrue,
+		TLS:           &tlsEnforced,
+		Capabilities:  &Capabilities{Sending: "enabled", Receiving: "enabled"},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestUpdateDomain(t *testing.T) {
+	var patched bool
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPatch && r.URL.Path == "/domains/domain-123":
+			patched = true
+			var body UpdateDomainRequest
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			if body.OpenTracking == nil || *body.OpenTracking != true {
+				t.Errorf("expected open_tracking true in PATCH body, got %+v", body.OpenTracking)
+			}
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"object":"domain","id":"domain-123"}`))
+		case r.Method == http.MethodGet && r.URL.Path == "/domains/domain-123":
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"id":"domain-123","name":"example.com","status":"verified","open_tracking":true,"capabilities":{"sending":"enabled","receiving":"disabled"},"records":[]}`))
+		default:
+			t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	c := New("test-key", WithBaseURL(server.URL))
+	openTrue := true
+	resp, err := c.UpdateDomain(context.Background(), "domain-123", UpdateDomainRequest{OpenTracking: &openTrue})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !patched {
+		t.Error("expected a PATCH request to be made")
+	}
+	if !resp.OpenTracking {
+		t.Error("expected open_tracking true from follow-up GET")
+	}
+}

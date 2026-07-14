@@ -53,18 +53,41 @@ type CreateAPIKeyResponse struct {
 	Token string `json:"token"`
 }
 
+type Capabilities struct {
+	Sending   string `json:"sending,omitempty"`
+	Receiving string `json:"receiving,omitempty"`
+}
+
 type CreateDomainRequest struct {
-	Name   string `json:"name"`
-	Region string `json:"region,omitempty"`
+	Name              string        `json:"name"`
+	Region            string        `json:"region,omitempty"`
+	CustomReturnPath  *string       `json:"custom_return_path,omitempty"`
+	OpenTracking      *bool         `json:"open_tracking,omitempty"`
+	ClickTracking     *bool         `json:"click_tracking,omitempty"`
+	TrackingSubdomain *string       `json:"tracking_subdomain,omitempty"`
+	TLS               *string       `json:"tls,omitempty"`
+	Capabilities      *Capabilities `json:"capabilities,omitempty"`
+}
+
+type UpdateDomainRequest struct {
+	OpenTracking      *bool         `json:"open_tracking,omitempty"`
+	ClickTracking     *bool         `json:"click_tracking,omitempty"`
+	TrackingSubdomain *string       `json:"tracking_subdomain,omitempty"`
+	TLS               *string       `json:"tls,omitempty"`
+	Capabilities      *Capabilities `json:"capabilities,omitempty"`
 }
 
 type Domain struct {
-	ID        string      `json:"id"`
-	Name      string      `json:"name"`
-	Status    string      `json:"status"`
-	Region    string      `json:"region"`
-	CreatedAt string      `json:"created_at"`
-	Records   []DNSRecord `json:"records"`
+	ID                string       `json:"id"`
+	Name              string       `json:"name"`
+	Status            string       `json:"status"`
+	Region            string       `json:"region"`
+	CreatedAt         string       `json:"created_at"`
+	OpenTracking      bool         `json:"open_tracking"`
+	ClickTracking     bool         `json:"click_tracking"`
+	TrackingSubdomain string       `json:"tracking_subdomain"`
+	Capabilities      Capabilities `json:"capabilities"`
+	Records           []DNSRecord  `json:"records"`
 }
 
 type DNSRecord struct {
@@ -219,6 +242,16 @@ func (c *Client) GetDomain(ctx context.Context, id string) (*Domain, error) {
 		return nil, err
 	}
 	return decodeResponse[Domain](resp)
+}
+
+func (c *Client) UpdateDomain(ctx context.Context, id string, req UpdateDomainRequest) (*Domain, error) {
+	resp, err := c.doRequest(ctx, http.MethodPatch, "domains/"+id, req)
+	if err != nil {
+		return nil, err
+	}
+	resp.Body.Close() //nolint:errcheck
+	// PATCH returns only {object, id}; GET for full state.
+	return c.GetDomain(ctx, id)
 }
 
 func (c *Client) DeleteDomain(ctx context.Context, id string) error {

@@ -317,3 +317,53 @@ func TestAPIError(t *testing.T) {
 		t.Fatal("expected error for 401 response")
 	}
 }
+
+func TestGetWebhookStatus(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/webhooks/wh-123" {
+			t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(Webhook{
+			ID:       "wh-123",
+			Endpoint: "https://example.com/webhook",
+			Events:   []string{"email.sent"},
+			Status:   "disabled",
+		})
+	}))
+	defer server.Close()
+
+	c := New("test-key", WithBaseURL(server.URL))
+	resp, err := c.GetWebhook(context.Background(), "wh-123")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp.Status != "disabled" {
+		t.Errorf("unexpected status: %s", resp.Status)
+	}
+}
+
+func TestUpdateWebhookStatus(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPatch || r.URL.Path != "/webhooks/wh-123" {
+			t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		var body UpdateWebhookRequest
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		if body.Status != "disabled" {
+			t.Errorf("expected status disabled in request, got %q", body.Status)
+		}
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(Webhook{ID: "wh-123", Status: "disabled"})
+	}))
+	defer server.Close()
+
+	c := New("test-key", WithBaseURL(server.URL))
+	resp, err := c.UpdateWebhook(context.Background(), "wh-123", UpdateWebhookRequest{Status: "disabled"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp.Status != "disabled" {
+		t.Errorf("unexpected status: %s", resp.Status)
+	}
+}

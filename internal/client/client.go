@@ -85,6 +85,7 @@ type CreateWebhookRequest struct {
 type UpdateWebhookRequest struct {
 	Endpoint string   `json:"endpoint,omitempty"`
 	Events   []string `json:"events,omitempty"`
+	Status   string   `json:"status,omitempty"`
 }
 
 type Webhook struct {
@@ -93,6 +94,7 @@ type Webhook struct {
 	Events        []string `json:"events"`
 	CreatedAt     string   `json:"created_at"`
 	SigningSecret string   `json:"signing_secret,omitempty"`
+	Status        string   `json:"status,omitempty"`
 }
 
 type APIError struct {

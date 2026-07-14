@@ -95,8 +95,10 @@ issue `PATCH /domains/{id}`, then `GET` for the full object.
 
 - Add `Status types.String` to `WebhookResourceModel`.
 - Add a `status` schema attribute: **Optional + Computed**, default `enabled`,
-  no `RequiresReplace`, validated with `stringvalidator.OneOf("enabled",
-  "disabled")`. (First use of a validator in this provider — small new import.)
+  no `RequiresReplace`. Allowed values (`enabled`/`disabled`) are documented in
+  the attribute description and enforced by the API — consistent with how the
+  existing `resend_api_key` `permission` enum is handled (no client-side
+  validator, no new dependency).
 - **Create**: `POST` (server creates as `enabled`) → `GET` for full state → if
   the plan's `status` is `disabled`, `PATCH` to disabled and re-read. Populate
   `status` from the final `GET`.
@@ -127,12 +129,15 @@ New attributes, split by how the API treats them:
 - **Read** populates the readable new fields from `GET`; it must **not** touch
   `tls` or `custom_return_path` (leaves whatever is in state), since the API
   never returns them.
-- Validators: `tls` → `OneOf("opportunistic","enforced")`;
-  `capabilities.sending`/`receiving` → `OneOf("enabled","disabled")`.
-- The "at least one capability enabled" invariant is left to the API to
-  enforce; the provider surfaces the API error rather than duplicating a
+- No client-side enum validators (consistent with the existing provider, which
+  documents `permission` values rather than validating them). Allowed values
+  for `tls` (`opportunistic`/`enforced`) and `capabilities.sending`/`receiving`
+  (`enabled`/`disabled`) are documented in the attribute descriptions and
+  enforced by the API.
+- The "at least one capability enabled" invariant is likewise left to the API
+  to enforce; the provider surfaces the API error rather than duplicating a
   cross-field rule (single source of truth). `capabilities` is only sent when
-  the user configures it.
+  it is known (configured or carried from prior state).
 - Existing DNS-record attributes (`spf_mx_record`, `spf_txt_record`,
   `dkim_records`) are unchanged.
 

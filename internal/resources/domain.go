@@ -143,6 +143,9 @@ func (r *DomainResource) Schema(_ context.Context, _ resource.SchemaRequest, res
 						Validators: []validator.String{
 							stringvalidator.OneOf("enabled", "disabled"),
 						},
+						PlanModifiers: []planmodifier.String{
+							stringplanmodifier.UseStateForUnknown(),
+						},
 					},
 					"receiving": schema.StringAttribute{
 						Optional:            true,
@@ -150,6 +153,9 @@ func (r *DomainResource) Schema(_ context.Context, _ resource.SchemaRequest, res
 						MarkdownDescription: "`enabled` or `disabled`. Defaults to `disabled`.",
 						Validators: []validator.String{
 							stringvalidator.OneOf("enabled", "disabled"),
+						},
+						PlanModifiers: []planmodifier.String{
+							stringplanmodifier.UseStateForUnknown(),
 						},
 					},
 				},

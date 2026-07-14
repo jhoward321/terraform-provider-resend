@@ -21,6 +21,7 @@ resource "resend_webhook" "test" {
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttrSet("resend_webhook.test", "id"),
 					resource.TestCheckResourceAttr("resend_webhook.test", "url", "https://example.com/webhook-test"),
+					resource.TestCheckResourceAttr("resend_webhook.test", "status", "enabled"),
 					resource.TestCheckResourceAttrSet("resend_webhook.test", "signing_secret"),
 				),
 			},
@@ -29,10 +30,12 @@ resource "resend_webhook" "test" {
 resource "resend_webhook" "test" {
   url         = "https://example.com/webhook-updated"
   event_types = ["email.sent", "email.delivered"]
+  status      = "disabled"
 }
 `,
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("resend_webhook.test", "url", "https://example.com/webhook-updated"),
+					resource.TestCheckResourceAttr("resend_webhook.test", "status", "disabled"),
 				),
 			},
 			{

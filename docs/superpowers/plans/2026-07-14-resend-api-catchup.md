@@ -12,7 +12,8 @@
 
 - Module path: `github.com/jhoward321/terraform-provider-resend` (use in all imports).
 - Go 1.25+ (`go.mod` declares `go 1.25.7`).
-- **No new dependencies.** Do not add `terraform-plugin-framework-validators`. Enum values are documented in attribute `MarkdownDescription` and enforced by the API (matches the existing un-validated `permission` field).
+- **One new dependency:** `github.com/hashicorp/terraform-plugin-framework-validators`, used for `stringvalidator.OneOf` on the closed enums only — webhook `status`, domain `tls`, and `capabilities.sending`/`receiving`. Leave `region` and webhook `events` unvalidated (they grow over time). The dependency is added in Task 2 (`go get ...@latest` + `go mod tidy`) and reused in Task 4.
+- The "at least one capability enabled" cross-field rule is NOT expressible with per-field `OneOf`; leave it to the API to enforce and surface the API error.
 - Optional booleans/strings/objects in **request** structs use pointer types + `omitempty` so unset fields are omitted from JSON and a deliberate `false` is distinguishable from "unset".
 - `tls` and `custom_return_path` are write-only in the Resend API: never read them back; leave their state untouched in Read.
 - Follow existing code style: table-free `//nolint:errcheck` on `resp.Body.Close()`, `decodeResponse[T]` generic helper, one httptest server per unit test.
@@ -172,9 +173,26 @@ type WebhookResourceModel struct {
 }
 ```
 
-- [ ] **Step 2: Add the `status` schema attribute and its import**
+- [ ] **Step 2: Add the validators dependency**
 
-Add the import `"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"` to the import block, then add this attribute inside the `Attributes` map in `Schema` (after `signing_secret`):
+Run:
+```bash
+go get github.com/hashicorp/terraform-plugin-framework-validators@latest
+go mod tidy
+```
+Expected: `go.mod` gains `github.com/hashicorp/terraform-plugin-framework-validators` as a direct dependency. Then `go build ./...` still succeeds.
+
+- [ ] **Step 3: Add the `status` schema attribute, its imports, and its validator**
+
+Add these imports to the import block:
+
+```go
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+```
+
+Then add this attribute inside the `Attributes` map in `Schema` (after `signing_secret`):
 
 ```go
 "status": schema.StringAttribute{
@@ -182,10 +200,13 @@ Add the import `"github.com/hashicorp/terraform-plugin-framework/resource/schema
 	Computed:            true,
 	MarkdownDescription: "Webhook status. One of `enabled` or `disabled`. Defaults to `enabled`.",
 	Default:             stringdefault.StaticString("enabled"),
+	Validators: []validator.String{
+		stringvalidator.OneOf("enabled", "disabled"),
+	},
 },
 ```
 
-- [ ] **Step 3: Set `status` from the API in Create (with create-then-PATCH for `disabled`)**
+- [ ] **Step 4: Set `status` from the API in Create (with create-then-PATCH for `disabled`)**
 
 In `Create`, after `data.SigningSecret = types.StringValue(result.SigningSecret)` and before the "read back full state" GET, insert the conditional PATCH; then set `data.Status` from the follow-up GET. The relevant part of `Create` becomes:
 
@@ -214,7 +235,7 @@ In `Create`, after `data.SigningSecret = types.StringValue(result.SigningSecret)
 	data.Status = types.StringValue(webhook.Status)
 ```
 
-- [ ] **Step 4: Set `status` from the API in Read**
+- [ ] **Step 5: Set `status` from the API in Read**
 
 In `Read`, after `data.CreatedAt = types.StringValue(result.CreatedAt)`, add:
 
@@ -222,7 +243,7 @@ In `Read`, after `data.CreatedAt = types.StringValue(result.CreatedAt)`, add:
 	data.Status = types.StringValue(result.Status)
 ```
 
-- [ ] **Step 5: Send and set `status` in Update**
+- [ ] **Step 6: Send and set `status` in Update**
 
 In `Update`, add `Status` to the PATCH request and set it after the read-back. The `UpdateWebhook` call becomes:
 
@@ -240,12 +261,12 @@ and after `data.CreatedAt = types.StringValue(webhook.CreatedAt)` add:
 	data.Status = types.StringValue(webhook.Status)
 ```
 
-- [ ] **Step 6: Build to verify it compiles**
+- [ ] **Step 7: Build to verify it compiles**
 
 Run: `go build ./...`
 Expected: no output (success).
 
-- [ ] **Step 7: Extend the acceptance test**
+- [ ] **Step 8: Extend the acceptance test**
 
 In `internal/resources/webhook_test.go`, update the first step's config and checks to include `status`, and add a third config step that toggles it. Replace the two config `TestStep`s (the create step and the update step) with:
 
@@ -279,12 +300,12 @@ resource "resend_webhook" "test" {
 			},
 ```
 
-- [ ] **Step 8: Run unit tests and vet**
+- [ ] **Step 9: Run unit tests and vet**
 
 Run: `go test ./... && go vet ./...`
 Expected: `Go test: ... passed`, no vet errors. (Acceptance tests skip without `RESEND_API_KEY`.)
 
-- [ ] **Step 9: Update docs**
+- [ ] **Step 10: Update docs**
 
 In `docs/resources/webhook.md`, add `status` to the documented attributes. Add this row/entry in the same style as the existing optional attributes (adjust wording to match the file's format):
 
@@ -292,10 +313,10 @@ In `docs/resources/webhook.md`, add `status` to the documented attributes. Add t
 - `status` (String) Webhook status. One of `enabled` or `disabled`. Defaults to `enabled`.
 ```
 
-- [ ] **Step 10: Commit**
+- [ ] **Step 11: Commit**
 
 ```bash
-git add internal/resources/webhook.go internal/resources/webhook_test.go docs/resources/webhook.md
+git add go.mod go.sum internal/resources/webhook.go internal/resources/webhook_test.go docs/resources/webhook.md
 git commit -m "feat(webhook): manage enabled/disabled status"
 ```
 
@@ -558,13 +579,15 @@ type DomainResourceModel struct {
 }
 ```
 
-- [ ] **Step 2: Add plan-modifier imports**
+- [ ] **Step 2: Add plan-modifier and validator imports**
 
-Add these imports to the import block in `internal/resources/domain.go`:
+The `terraform-plugin-framework-validators` dependency was already added in Task 2, so no `go get` is needed here. Add these imports to the import block in `internal/resources/domain.go`:
 
 ```go
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/objectplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 ```
 
 - [ ] **Step 3: Add the new schema attributes**
@@ -606,6 +629,9 @@ In `Schema`, add these attributes to the `Attributes` map (place them after `cre
 				"tls": schema.StringAttribute{
 					Optional:            true,
 					MarkdownDescription: "TLS enforcement policy. One of `opportunistic` or `enforced`. Updated in place. Write-only in the Resend API (not returned on read), so drift is not detected.",
+					Validators: []validator.String{
+						stringvalidator.OneOf("opportunistic", "enforced"),
+					},
 				},
 				"capabilities": schema.SingleNestedAttribute{
 					Optional:            true,
@@ -619,11 +645,17 @@ In `Schema`, add these attributes to the `Attributes` map (place them after `cre
 							Optional:            true,
 							Computed:            true,
 							MarkdownDescription: "`enabled` or `disabled`. Defaults to `enabled`.",
+							Validators: []validator.String{
+								stringvalidator.OneOf("enabled", "disabled"),
+							},
 						},
 						"receiving": schema.StringAttribute{
 							Optional:            true,
 							Computed:            true,
 							MarkdownDescription: "`enabled` or `disabled`. Defaults to `disabled`.",
+							Validators: []validator.String{
+								stringvalidator.OneOf("enabled", "disabled"),
+							},
 						},
 					},
 				},
@@ -900,6 +932,6 @@ Expected: the design/spec commits plus the four feature commits (client webhook,
 
 ## Self-Review Notes (for the plan author)
 
-- **Spec coverage:** client webhook `status` (Task 1) ✔; webhook resource managed status incl. create-then-PATCH + drift read (Task 2) ✔; client domain fields + `UpdateDomain` PATCH→GET (Task 3) ✔; domain new attributes with correct Optional/Computed/RequiresReplace split, real Update, write-only handling of `tls`/`custom_return_path` (Task 4) ✔; unit tests first throughout ✔; acceptance test extensions ✔; docs updates ✔; no new dependencies ✔.
+- **Spec coverage:** client webhook `status` (Task 1) ✔; webhook resource managed status incl. create-then-PATCH + drift read, `status` validated (Task 2) ✔; client domain fields + `UpdateDomain` PATCH→GET (Task 3) ✔; domain new attributes with correct Optional/Computed/RequiresReplace split, real Update, write-only handling of `tls`/`custom_return_path`, `tls`/`capabilities` validated (Task 4) ✔; unit tests first throughout ✔; acceptance test extensions ✔; docs updates ✔; one new dependency (`terraform-plugin-framework-validators`, added Task 2) ✔.
 - **Naming consistency:** `Capabilities{Sending,Receiving}`, `UpdateDomainRequest`, `UpdateDomain`, `setDomainState`, `capabilitiesToAPI`, `capabilitiesToObject`, `capabilitiesAttrTypes` used identically across Tasks 3–4.
 - **Acceptance tests** require `TF_ACC=1` + `RESEND_API_KEY` and a free-plan domain slot; they validate the wire-format assumptions against the live API and are not expected to run in CI without those secrets.

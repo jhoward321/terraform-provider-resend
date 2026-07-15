@@ -18,13 +18,18 @@ func TestAccDomainResource(t *testing.T) {
 			{
 				Config: fmt.Sprintf(`
 resource "resend_domain" "test" {
-  name = %q
+  name           = %q
+  open_tracking  = true
+  click_tracking = true
+  tls            = "enforced"
 }
 `, domainName),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttrSet("resend_domain.test", "id"),
 					resource.TestCheckResourceAttr("resend_domain.test", "name", domainName),
-					resource.TestCheckResourceAttrSet("resend_domain.test", "status"),
+					resource.TestCheckResourceAttr("resend_domain.test", "open_tracking", "true"),
+					resource.TestCheckResourceAttr("resend_domain.test", "click_tracking", "true"),
+					resource.TestCheckResourceAttrSet("resend_domain.test", "capabilities.sending"),
 					resource.TestCheckResourceAttrSet("resend_domain.test", "spf_mx_record.type"),
 					resource.TestCheckResourceAttrSet("resend_domain.test", "spf_mx_record.name"),
 					resource.TestCheckResourceAttrSet("resend_domain.test", "spf_mx_record.value"),
@@ -37,9 +42,37 @@ resource "resend_domain" "test" {
 				),
 			},
 			{
-				ResourceName:      "resend_domain.test",
-				ImportState:       true,
-				ImportStateVerify: true,
+				Config: fmt.Sprintf(`
+resource "resend_domain" "test" {
+  name           = %q
+  open_tracking  = false
+  click_tracking = true
+  tls            = "enforced"
+}
+`, domainName),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("resend_domain.test", "open_tracking", "false"),
+				),
+			},
+			{
+				Config: fmt.Sprintf(`
+resource "resend_domain" "test" {
+  name = %q
+  capabilities = {
+    sending = "enabled"
+  }
+}
+`, domainName),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("resend_domain.test", "capabilities.sending", "enabled"),
+					resource.TestCheckResourceAttrSet("resend_domain.test", "capabilities.receiving"),
+				),
+			},
+			{
+				ResourceName:            "resend_domain.test",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"tls", "custom_return_path"},
 			},
 		},
 	})

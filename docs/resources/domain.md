@@ -28,7 +28,13 @@ resource "resend_domain" "example" {
 
 ### Optional
 
+- `capabilities` (Attributes) Domain sending/receiving capabilities. At least one must be `enabled` (enforced by the API). (see [below for nested schema](#nestedatt--capabilities))
+- `click_tracking` (Boolean) Track clicks within HTML email bodies. Updated in place.
+- `custom_return_path` (String) Subdomain for the custom Return-Path (SPF/DMARC). Defaults to `send`. Create-only. Write-only in the Resend API (not returned on read), so drift is not detected.
+- `open_tracking` (Boolean) Track email opens. Updated in place.
 - `region` (String) AWS region for the domain (e.g., `us-east-1`).
+- `tls` (String) TLS enforcement policy. One of `opportunistic` or `enforced`. Updated in place. Write-only in the Resend API (not returned on read), so drift is not detected.
+- `tracking_subdomain` (String) Custom subdomain used for open/click tracking. Updated in place.
 
 ### Read-Only
 
@@ -38,6 +44,15 @@ resource "resend_domain" "example" {
 - `spf_mx_record` (Attributes) SPF MX record for domain verification. (see [below for nested schema](#nestedatt--spf_mx_record))
 - `spf_txt_record` (Attributes) SPF TXT record for domain verification. (see [below for nested schema](#nestedatt--spf_txt_record))
 - `status` (String) Domain verification status.
+
+<a id="nestedatt--capabilities"></a>
+### Nested Schema for `capabilities`
+
+Optional:
+
+- `receiving` (String) `enabled` or `disabled`. Defaults to `disabled`.
+- `sending` (String) `enabled` or `disabled`. Defaults to `enabled`.
+
 
 <a id="nestedatt--dkim_records"></a>
 ### Nested Schema for `dkim_records`

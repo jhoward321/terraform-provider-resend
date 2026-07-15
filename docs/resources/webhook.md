@@ -27,8 +27,12 @@ resource "resend_webhook" "example" {
 - `event_types` (List of String) Event types to subscribe to (e.g., `email.sent`, `email.delivered`, `email.bounced`).
 - `url` (String) The URL to receive webhook events.
 
+### Optional
+
+- `status` (String) Webhook status. One of `enabled` or `disabled`. Defaults to `enabled`.
+
 ### Read-Only
 
 - `created_at` (String) Timestamp when the webhook was created.
 - `id` (String) Webhook identifier.
-- `signing_secret` (String, Sensitive) The webhook signing secret. Only available at creation time.
+- `signing_secret` (String, Sensitive) The webhook signing secret. Only available at creation time; will be empty after `terraform import`.

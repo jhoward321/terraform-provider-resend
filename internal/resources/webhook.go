@@ -3,11 +3,14 @@ package resources
 import (
 	"context"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/jhoward321/terraform-provider-resend/internal/client"
 )
@@ -27,6 +30,7 @@ type WebhookResourceModel struct {
 	EventTypes    types.List   `tfsdk:"event_types"`
 	CreatedAt     types.String `tfsdk:"created_at"`
 	SigningSecret types.String `tfsdk:"signing_secret"`
+	Status        types.String `tfsdk:"status"`
 }
 
 func NewWebhookResource() resource.Resource {
@@ -72,6 +76,15 @@ func (r *WebhookResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
+			"status": schema.StringAttribute{
+				Optional:            true,
+				Computed:            true,
+				MarkdownDescription: "Webhook status. One of `enabled` or `disabled`. Defaults to `enabled`.",
+				Default:             stringdefault.StaticString("enabled"),
+				Validators: []validator.String{
+					stringvalidator.OneOf("enabled", "disabled"),
+				},
+			},
 		},
 	}
 }
@@ -108,6 +121,16 @@ func (r *WebhookResource) Create(ctx context.Context, req resource.CreateRequest
 	data.ID = types.StringValue(result.ID)
 	data.SigningSecret = types.StringValue(result.SigningSecret)
 
+	// POST does not accept status; if a non-default status was requested, PATCH it.
+	if data.Status.ValueString() == "disabled" {
+		if _, err := r.client.UpdateWebhook(ctx, result.ID, client.UpdateWebhookRequest{
+			Status: "disabled",
+		}); err != nil {
+			resp.Diagnostics.AddError("Error setting webhook status", err.Error())
+			return
+		}
+	}
+
 	// Create response only returns id and signing_secret, so read back full state.
 	webhook, err := r.client.GetWebhook(ctx, result.ID)
 	if err != nil {
@@ -116,6 +139,7 @@ func (r *WebhookResource) Create(ctx context.Context, req resource.CreateRequest
 	}
 	data.URL = types.StringValue(webhook.Endpoint)
 	data.CreatedAt = types.StringValue(webhook.CreatedAt)
+	data.Status = types.StringValue(webhook.Status)
 
 	etList, diags := types.ListValueFrom(ctx, types.StringType, webhook.Events)
 	resp.Diagnostics.Append(diags...)
@@ -139,6 +163,7 @@ func (r *WebhookResource) Read(ctx context.Context, req resource.ReadRequest, re
 
 	data.URL = types.StringValue(result.Endpoint)
 	data.CreatedAt = types.StringValue(result.CreatedAt)
+	data.Status = types.StringValue(result.Status)
 
 	etList, diags := types.ListValueFrom(ctx, types.StringType, result.Events)
 	resp.Diagnostics.Append(diags...)
@@ -163,6 +188,7 @@ func (r *WebhookResource) Update(ctx context.Context, req resource.UpdateRequest
 	_, err := r.client.UpdateWebhook(ctx, data.ID.ValueString(), client.UpdateWebhookRequest{
 		Endpoint: data.URL.ValueString(),
 		Events:   eventTypes,
+		Status:   data.Status.ValueString(),
 	})
 	if err != nil {
 		resp.Diagnostics.AddError("Error updating webhook", err.Error())
@@ -178,6 +204,7 @@ func (r *WebhookResource) Update(ctx context.Context, req resource.UpdateRequest
 
 	data.URL = types.StringValue(webhook.Endpoint)
 	data.CreatedAt = types.StringValue(webhook.CreatedAt)
+	data.Status = types.StringValue(webhook.Status)
 
 	etList, diags := types.ListValueFrom(ctx, types.StringType, webhook.Events)
 	resp.Diagnostics.Append(diags...)

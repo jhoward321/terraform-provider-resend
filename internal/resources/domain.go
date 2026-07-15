@@ -2,6 +2,7 @@ package resources
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
@@ -226,7 +227,7 @@ func (r *DomainResource) Create(ctx context.Context, req resource.CreateRequest,
 		createReq.CustomReturnPath = &v
 	}
 
-	result, err := r.client.CreateDomain(ctx, createReq)
+	created, err := r.client.CreateDomain(ctx, createReq)
 	if err != nil {
 		resp.Diagnostics.AddError("Error creating domain", err.Error())
 		return
@@ -235,10 +236,20 @@ func (r *DomainResource) Create(ctx context.Context, req resource.CreateRequest,
 	// The create endpoint ignores the tracking/tls/capabilities settings
 	// (e.g. open_tracking always comes back false regardless of the request),
 	// so apply them with a follow-up PATCH when configured, then read back.
+	result := created
 	if updReq, hasUpdates := buildDomainUpdateRequest(&data); hasUpdates {
-		result, err = r.client.UpdateDomain(ctx, result.ID, updReq)
+		result, err = r.client.UpdateDomain(ctx, created.ID, updReq)
 		if err != nil {
-			resp.Diagnostics.AddError("Error applying domain settings after create", err.Error())
+			// The domain was created but its settings could not be applied.
+			// Roll it back so it is not left orphaned — on limited plans an
+			// orphaned domain also consumes the account's domain slot.
+			detail := err.Error()
+			if delErr := r.client.DeleteDomain(ctx, created.ID); delErr != nil {
+				detail = fmt.Sprintf(
+					"%s\n\nRolling back the created domain also failed: %s\nDomain %q may need to be deleted manually.",
+					detail, delErr, created.ID)
+			}
+			resp.Diagnostics.AddError("Error applying domain settings after create", detail)
 			return
 		}
 	}

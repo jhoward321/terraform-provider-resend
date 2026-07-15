@@ -2,6 +2,7 @@ package resources
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -126,7 +127,7 @@ func (r *WebhookResource) Create(ctx context.Context, req resource.CreateRequest
 		if _, err := r.client.UpdateWebhook(ctx, result.ID, client.UpdateWebhookRequest{
 			Status: "disabled",
 		}); err != nil {
-			resp.Diagnostics.AddError("Error setting webhook status", err.Error())
+			resp.Diagnostics.AddError("Error setting webhook status", r.rollbackWebhook(ctx, result.ID, err))
 			return
 		}
 	}
@@ -134,7 +135,7 @@ func (r *WebhookResource) Create(ctx context.Context, req resource.CreateRequest
 	// Create response only returns id and signing_secret, so read back full state.
 	webhook, err := r.client.GetWebhook(ctx, result.ID)
 	if err != nil {
-		resp.Diagnostics.AddError("Error reading webhook after create", err.Error())
+		resp.Diagnostics.AddError("Error reading webhook after create", r.rollbackWebhook(ctx, result.ID, err))
 		return
 	}
 	data.URL = types.StringValue(webhook.Endpoint)
@@ -146,6 +147,19 @@ func (r *WebhookResource) Create(ctx context.Context, req resource.CreateRequest
 	data.EventTypes = etList
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+}
+
+// rollbackWebhook deletes a webhook that was created during a Create that then
+// failed a later step, so it is not left orphaned. It returns an error detail
+// describing the original failure plus any cleanup failure.
+func (r *WebhookResource) rollbackWebhook(ctx context.Context, id string, cause error) string {
+	detail := cause.Error()
+	if delErr := r.client.DeleteWebhook(ctx, id); delErr != nil {
+		detail = fmt.Sprintf(
+			"%s\n\nRolling back the created webhook also failed: %s\nWebhook %q may need to be deleted manually.",
+			detail, delErr, id)
+	}
+	return detail
 }
 
 func (r *WebhookResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {

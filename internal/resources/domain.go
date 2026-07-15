@@ -217,36 +217,30 @@ func (r *DomainResource) Create(ctx context.Context, req resource.CreateRequest,
 		return
 	}
 
-	apiReq := client.CreateDomainRequest{
+	createReq := client.CreateDomainRequest{
 		Name:   data.Name.ValueString(),
 		Region: data.Region.ValueString(),
 	}
 	if !data.CustomReturnPath.IsNull() {
 		v := data.CustomReturnPath.ValueString()
-		apiReq.CustomReturnPath = &v
+		createReq.CustomReturnPath = &v
 	}
-	if !data.OpenTracking.IsNull() && !data.OpenTracking.IsUnknown() {
-		v := data.OpenTracking.ValueBool()
-		apiReq.OpenTracking = &v
-	}
-	if !data.ClickTracking.IsNull() && !data.ClickTracking.IsUnknown() {
-		v := data.ClickTracking.ValueBool()
-		apiReq.ClickTracking = &v
-	}
-	if !data.TrackingSubdomain.IsNull() && !data.TrackingSubdomain.IsUnknown() {
-		v := data.TrackingSubdomain.ValueString()
-		apiReq.TrackingSubdomain = &v
-	}
-	if !data.TLS.IsNull() {
-		v := data.TLS.ValueString()
-		apiReq.TLS = &v
-	}
-	apiReq.Capabilities = capabilitiesToAPI(data.Capabilities)
 
-	result, err := r.client.CreateDomain(ctx, apiReq)
+	result, err := r.client.CreateDomain(ctx, createReq)
 	if err != nil {
 		resp.Diagnostics.AddError("Error creating domain", err.Error())
 		return
+	}
+
+	// The create endpoint ignores the tracking/tls/capabilities settings
+	// (e.g. open_tracking always comes back false regardless of the request),
+	// so apply them with a follow-up PATCH when configured, then read back.
+	if updReq, hasUpdates := buildDomainUpdateRequest(&data); hasUpdates {
+		result, err = r.client.UpdateDomain(ctx, result.ID, updReq)
+		if err != nil {
+			resp.Diagnostics.AddError("Error applying domain settings after create", err.Error())
+			return
+		}
 	}
 
 	resp.Diagnostics.Append(setDomainState(result, &data)...)
@@ -285,24 +279,7 @@ func (r *DomainResource) Update(ctx context.Context, req resource.UpdateRequest,
 		return
 	}
 
-	updReq := client.UpdateDomainRequest{}
-	if !data.OpenTracking.IsNull() && !data.OpenTracking.IsUnknown() {
-		v := data.OpenTracking.ValueBool()
-		updReq.OpenTracking = &v
-	}
-	if !data.ClickTracking.IsNull() && !data.ClickTracking.IsUnknown() {
-		v := data.ClickTracking.ValueBool()
-		updReq.ClickTracking = &v
-	}
-	if !data.TrackingSubdomain.IsNull() && !data.TrackingSubdomain.IsUnknown() {
-		v := data.TrackingSubdomain.ValueString()
-		updReq.TrackingSubdomain = &v
-	}
-	if !data.TLS.IsNull() {
-		v := data.TLS.ValueString()
-		updReq.TLS = &v
-	}
-	updReq.Capabilities = capabilitiesToAPI(data.Capabilities)
+	updReq, _ := buildDomainUpdateRequest(&data)
 
 	result, err := r.client.UpdateDomain(ctx, data.ID.ValueString(), updReq)
 	if err != nil {
@@ -463,6 +440,40 @@ func capabilitiesToAPI(obj types.Object) *client.Capabilities {
 		caps.Receiving = s.ValueString()
 	}
 	return caps
+}
+
+// buildDomainUpdateRequest collects the in-place-updatable domain settings from
+// the model into an UpdateDomainRequest. The bool reports whether any field was
+// configured — used by Create to decide if a follow-up PATCH is needed (the
+// create endpoint ignores these settings) and harmlessly ignored by Update.
+func buildDomainUpdateRequest(data *DomainResourceModel) (client.UpdateDomainRequest, bool) {
+	var req client.UpdateDomainRequest
+	set := false
+	if !data.OpenTracking.IsNull() && !data.OpenTracking.IsUnknown() {
+		v := data.OpenTracking.ValueBool()
+		req.OpenTracking = &v
+		set = true
+	}
+	if !data.ClickTracking.IsNull() && !data.ClickTracking.IsUnknown() {
+		v := data.ClickTracking.ValueBool()
+		req.ClickTracking = &v
+		set = true
+	}
+	if !data.TrackingSubdomain.IsNull() && !data.TrackingSubdomain.IsUnknown() {
+		v := data.TrackingSubdomain.ValueString()
+		req.TrackingSubdomain = &v
+		set = true
+	}
+	if !data.TLS.IsNull() {
+		v := data.TLS.ValueString()
+		req.TLS = &v
+		set = true
+	}
+	if caps := capabilitiesToAPI(data.Capabilities); caps != nil {
+		req.Capabilities = caps
+		set = true
+	}
+	return req, set
 }
 
 func capabilitiesToObject(c client.Capabilities) (types.Object, diag.Diagnostics) {
